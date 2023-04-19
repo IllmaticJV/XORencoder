@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # File name          : xorencoder.py
 # Author             : IllmaticJV
-# Date created       : 18 Apr 2023
+# Date created       : 19 Apr 2023
 
 import argparse 
 import re 
@@ -24,58 +24,87 @@ def banner():
   print("                                                                       ")
   print("                                                                       ")
   print("                                            Created by IllmaticJV      ")
+  print("                                                                       ")
 
-def main():
+def get_arguments():
     # create an ArgumentParser object
     parser = argparse.ArgumentParser(description='XOR Encoder')
-
     # add command-line arguments for string, file, and key
-    parser.add_argument('-s', '--string', help='Input string to encode')
     parser.add_argument('-f', '--file', help='Input file to encode')
     parser.add_argument('-k', '--key', help='Key value to XOR with')
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    # check if neither string nor file is specified
-    if not args.string and not args.file:
-        print('Error: Please specify an input string or file')
-        return
+def c_read_hex_string_from_file(file_path):
+    with open(file_path, 'r') as f:
+        file_contents = f.read()   # read the file contents
+        hex_str = ''.join(re.findall(r'0x([0-9a-fA-F]{2})', file_contents))   # extract the hex string using regex
+    return hex_str
 
-    # check if both string and file are specified
-    if args.string and args.file:
-        print('Error: Please specify only one input source')
-        return
-
-    # if file is specified, read the contents and extract the hex string
-    if args.file:
-        with open(args.file, 'r') as f:
-            file_contents = f.read()   # read the file contents
-            hex_str = ''.join(re.findall(r'0x([0-9a-fA-F]{2})', file_contents))   # extract the hex string using regex
-    else:
-        hex_str = args.string.replace('0x', '').replace(',', '').replace(' ', '')   # if string is specified, extract the hex string
-
+def convert_hex_string_to_bytes(hex_str):
     try:
         byte_arr = bytes.fromhex(hex_str)   # convert the hex string to bytes
     except ValueError:
         print('Error: Invalid hex string')
-        return
+        return None
+    return byte_arr
 
-    # if key is specified, convert it to an integer
+def get_key_value(args):
     if args.key:
         try:
             key_value = int(args.key, 16)
         except ValueError:
             print('Error: Invalid key value')
-            return
+            return None
     else:
-        key_value = int(input('Enter key value in format such as 0xfa: '), 16)   # if key is not specified, ask for user input
+        while True:
+            key_input = input('Enter key value in format such as 0xfa: ')
+            try:
+                key_value = int(key_input, 16)
+                break
+            except ValueError:
+                print('Error: Invalid key value')
+    return key_value
 
-    # XOR each byte of the byte array with the key value
+def xor_encode(byte_arr, key_value):
     encoded_bytes = [b ^ key_value for b in byte_arr]
+    return bytes(encoded_bytes)
 
-    # Output XORed byte array as C-style byte array
+def output_c_style_byte_array(encoded_bytes):
     print('XOR payload:')
     byte_arr_str = ', '.join(['0x{:02x}'.format(b) for b in encoded_bytes])   # format the bytes as C-style byte array
-    print('byte[] buf = new byte[{}] {{ {} }};'.format(len(encoded_bytes), byte_arr_str))
+    output = 'byte[] buf = new byte[{}] {{ {} }};'.format(len(encoded_bytes), byte_arr_str)
+    print(output)
+    write_to_file(output)
+
+def write_to_file(output: str):
+    """Writes content to a file based on user input."""
+    response = input("Do you want to write the content to a file? (y/n) ")
+    if response.lower() == 'y':
+        file_path = input("Enter the file path to write to (default is current folder): ") or "output.xor"
+        with open(file_path, 'w') as f:
+            f.write(output)
+        print(f"Content written to file: {file_path}")
+    else:
+        print("Content not written to file.")
+
+def main():
+    args = get_arguments()
+    # check if neither string nor file is specified
+    if not args.file: 
+        print('Error: Please specify an input file')
+        return  
+    key_value = get_key_value(args)
+    if not key_value:
+        return    
+    hex_str = c_read_hex_string_from_file(args.file)
+    if not hex_str:
+        return
+    byte_arr = convert_hex_string_to_bytes(hex_str)
+    if not byte_arr:
+        return
+    encoded_bytes = xor_encode(byte_arr, key_value)
+    output_c_style_byte_array(encoded_bytes)
 
 if __name__ == '__main__':
+    banner()
     main()
